@@ -1,0 +1,246 @@
+#Mount ke Google Drive
+from google.colab import drive
+drive.mount('/content/drive')
+
+#Import file dari Google Drive
+import zipfile
+zip_path = "/content/drive/MyDrive/ProCodeCG/DETRAC_Upload.zip"
+extract_path = "/content/UA-DETRAC-YOLO"
+
+with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+    zip_ref.extractall(extract_path)
+
+print("✅ ZIP berhasil diekstrak ke:", extract_path)
+
+#Telusuri semua file dengan import dari modul os
+import os
+
+for root, dirs, files in os.walk(extract_path):
+    for file in files:
+        print(os.path.join(root, file))
+
+#Memindahkan file
+import os, shutil
+
+base_path = "/content/UA-DETRAC-YOLO"
+old_img = f"{base_path}/DETRAC_Upload/images/train"
+old_lbl = f"{base_path}/DETRAC_Upload/labels/train"
+
+new_img = f"{base_path}/images/train"
+new_lbl = f"{base_path}/labels/train"
+
+# Buat folder baru jika belum ada
+os.makedirs(new_img, exist_ok=True)
+os.makedirs(new_lbl, exist_ok=True)
+
+# Pindahkan semua gambar
+for f in os.listdir(old_img):
+    shutil.move(os.path.join(old_img, f), new_img)
+
+# Pindahkan semua label
+for f in os.listdir(old_lbl):
+    shutil.move(os.path.join(old_lbl, f), new_lbl)
+
+print("File berhasil dipindahkan.")
+
+#Cek apakah semua file berhasil dipindahkan atau tidak
+print("Gambar:", len(os.listdir(new_img)))
+print("Label :", len(os.listdir(new_lbl)))
+
+#Mengecek apakah ada file yang invalid atau tidak
+invalid_files = []
+
+for filename in os.listdir(new_lbl):
+    path = os.path.join(new_lbl, filename)
+    # Lewati jika bukan file atau bukan .txt
+    if not os.path.isfile(path) or not filename.lower().endswith(".txt"):
+        continue
+
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            for line in f:
+                if len(line.strip().split()) != 5:
+                    invalid_files.append(path)
+                    break
+    except UnicodeDecodeError:
+        invalid_files.append(path)
+
+print("Label invalid:", len(invalid_files))
+invalid_files[:10]  # tampilkan 10 pertama
+
+#Membuat data.yaml
+# Buat isi YAML
+yaml_content = """
+train: /content/UA-DETRAC-YOLO/images/train
+val: /content/UA-DETRAC-YOLO/images/train
+
+nc: 6
+names:
+  - car
+  - bus
+  - van
+  - truck
+  - overweight
+  - not_overweight
+"""
+
+# Simpan sebagai file data.yaml
+with open('/content/UA-DETRAC-YOLO/data.yaml', 'w') as f:
+    f.write(yaml_content.strip())
+
+print("✅ File data.yaml berhasil dibuat di /content/UA-DETRAC-YOLO/data.yaml")
+
+#Menginstall ultralystic untuk uji coba YOLO
+!pip install ultralytics
+from ultralytics import YOLO
+
+#Menambahkan fitur auto backup file
+import os
+import time
+import shutil
+import threading
+
+# Path model YOLOv8
+best_path = "/content/runs/detect/detrac_yolov8_overweight/weights/best.pt"
+last_path = "/content/runs/detect/detrac_yolov8_overweight/weights/last.pt"
+
+# Path backup ke Google Drive
+backup_best = "/content/drive/MyDrive/ProCodeCG/best_autobackup.pt"
+backup_last = "/content/drive/MyDrive/ProCodeCG/last_autobackup.pt"
+
+def autosave_best_and_last(interval=60):
+    print("🔁 Auto-backup aktif (best.pt & last.pt), cek setiap", interval, "detik...")
+    last_best_mtime = 0
+    last_last_mtime = 0
+    while True:
+        try:
+            # Backup best.pt
+            if os.path.exists(best_path):
+                new_best_mtime = os.path.getmtime(best_path)
+                if new_best_mtime != last_best_mtime:
+                    shutil.copy(best_path, backup_best)
+                    print("✅ best.pt di-backup.")
+                    last_best_mtime = new_best_mtime
+
+            # Backup last.pt
+            if os.path.exists(last_path):
+                new_last_mtime = os.path.getmtime(last_path)
+                if new_last_mtime != last_last_mtime:
+                    shutil.copy(last_path, backup_last)
+                    print("✅ last.pt di-backup.")
+                    last_last_mtime = new_last_mtime
+
+            time.sleep(interval)
+        except KeyboardInterrupt:
+            print("⏹️ Auto-backup dihentikan.")
+            break
+
+#Aktifkan auto backup
+backup_thread = threading.Thread(target=autosave_best_and_last, daemon=True)
+backup_thread.start()
+
+# Siapkan autosave backup
+import os, time, shutil, threading
+from ultralytics import YOLO
+
+# Path model hasil training
+best_path = "/content/runs/detect/detrac_yolov8_overweight/weights/best.pt"
+last_path = "/content/runs/detect/detrac_yolov8_overweight/weights/last.pt"
+
+# Path backup ke Google Drive
+backup_best = "/content/drive/MyDrive/ProCodeCG/best_autobackup.pt"
+backup_last = "/content/drive/MyDrive/ProCodeCG/last_autobackup.pt"
+
+# Fungsi autosave backup
+def autosave_best_and_last(interval=60):
+    print("🔁 Auto-backup aktif setiap", interval, "detik...")
+    last_best_mtime, last_last_mtime = 0, 0
+    while True:
+        try:
+            if os.path.exists(best_path):
+                best_mtime = os.path.getmtime(best_path)
+                if best_mtime != last_best_mtime:
+                    shutil.copy(best_path, backup_best)
+                    print("✅ best.pt di-backup ke Drive.")
+                    last_best_mtime = best_mtime
+            if os.path.exists(last_path):
+                last_mtime = os.path.getmtime(last_path)
+                if last_mtime != last_last_mtime:
+                    shutil.copy(last_path, backup_last)
+                    print("✅ last.pt di-backup ke Drive.")
+                    last_last_mtime = last_mtime
+            time.sleep(interval)
+        except KeyboardInterrupt:
+            print("⏹️ Auto-backup dihentikan.")
+            break
+
+threading.Thread(target=autosave_best_and_last, daemon=True).start()
+
+# === LANGKAH 3: Mulai training model ===
+model = YOLO("yolov8n.yaml")
+model.train(
+    data="/content/UA-DETRAC-YOLO/data.yaml",
+    epochs=20,
+    imgsz=416,
+    batch=16,
+    name="detrac_yolov8_overweight"
+
+#Install library python ultarlystic
+!pip install ultralytics --quiet
+
+#Tambahkan fitur callback.py untuk memanggil potongan kode secara otomatis
+import os
+
+# Pastikan folder sudah ada
+os.makedirs("/content/drive/MyDrive/ProCodeCG", exist_ok=True)
+
+# Isi callback script
+callback_code = """
+import shutil
+import os
+
+def on_fit_epoch_end(trainer):
+    last_model_path = trainer.save_dir / "weights" / "last.pt"
+    best_model_path = trainer.save_dir / "weights" / "best.pt"
+
+    drive_backup_dir = "/content/drive/MyDrive/ProCodeCG"
+    last_backup_path = os.path.join(drive_backup_dir, "last_autobackup.pt")
+    best_backup_path = os.path.join(drive_backup_dir, "best_autobackup.pt")
+
+    try:
+        if last_model_path.exists():
+            shutil.copy(last_model_path, last_backup_path)
+            print(f"✅ Last model backed up to: {last_backup_path}")
+        if best_model_path.exists():
+            shutil.copy(best_model_path, best_backup_path)
+            print(f"✅ Best model backed up to: {best_backup_path}")
+    except Exception as e:
+        print(f"❌ Error during backup: {e}")
+"""
+
+# Simpan callback.py ke Google Drive
+with open("/content/drive/MyDrive/ProCodeCG/callback.py", "w") as f:
+    f.write(callback_code)
+
+print("✅ File callback.py berhasil disimpan ke Google Drive.")
+
+#cek apakah callback.py berhasil *note jalankan di thread terpisah
+!mkdir -p /usr/local/lib/python3.11/dist-packages/ultralytics/callbacks
+!cp /content/drive/MyDrive/ProCodeCG/callback.py /usr/local/lib/python3.11/dist-packages/ultralytics/callbacks/callback.py
+!cat /usr/local/lib/python3.11/dist-packages/ultralytics/callbacks/callback.py
+
+#resume training YOLO
+!yolo detect train \
+  data=/content/UA-DETRAC-YOLO/data.yaml \
+  model=/content/drive/MyDrive/ProCodeCG/last_autobackup.pt \
+  resume=True \
+  epochs=20 \
+  name=detrac_yolov8_overweight
+
+#jika training YOLO sudah selesai tampilkan isi foldernya
+!ls /content/runs/detect/detrac_yolov8_overweight/
+
+#tampilkan gambar 
+from IPython.display import Image
+Image(filename='/content/runs/detect/detrac_yolov8_overweight/labels.jpg', width=600)
+
